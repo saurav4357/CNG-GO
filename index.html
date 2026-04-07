@@ -3,78 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CNG-Go Pilot</title>
+    <title>CNG-Go Live</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-gray-100 font-sans h-screen flex flex-col">
+<body class="bg-slate-100 font-sans h-screen flex flex-col">
 
-    <nav class="bg-blue-800 text-white p-4 shadow-lg flex justify-between items-center">
-        <h1 class="text-2xl font-black italic">CNG-Go 🚕</h1>
-        <div id="gps-status" class="text-[10px] bg-red-600 px-2 py-1 rounded animate-pulse">GPS OFF</div>
+    <nav class="bg-blue-700 text-white p-5 shadow-xl text-center">
+        <h1 class="text-2xl font-black italic">CNG-GO 🚕</h1>
+        <p class="text-xs opacity-80">Live Station Status / लाइव स्टेशन स्थिति</p>
     </nav>
 
-    <div id="map" class="h-64 w-full shadow-inner border-b-2 border-blue-200"></div>
+    <div id="app" class="p-4 space-y-4">
+        <div class="bg-white p-5 rounded-3xl shadow-sm border-2 border-slate-200">
+            <h2 class="text-xl font-bold mb-3 text-slate-800 text-center">IGL Okhla Phase 3</h2>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="sendUpdate('Okhla P3', '🟢 FAST')" class="bg-green-500 text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all">🟢 चालू</button>
+                <button onclick="sendUpdate('Okhla P3', '🟡 BUSY')" class="bg-yellow-500 text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all">🟡 भीड़</button>
+            </div>
+        </div>
 
-    <div id="station-list" class="flex-grow overflow-y-auto p-4 space-y-3">
-        <p class="text-center text-gray-500 font-bold py-10">Finding nearest pumps...<br>पास के पंप ढूंढ रहे हैं...</p>
-    </div>
-
-    <div class="p-4 bg-white border-t">
-        <button onclick="getLocation()" class="w-full bg-blue-700 text-white py-4 rounded-2xl text-xl font-black shadow-xl active:scale-95 transition-all uppercase">
-            Check Nearest / पास वाला देखें 📍
-        </button>
+        <div class="bg-white p-5 rounded-3xl shadow-sm border-2 border-slate-200">
+            <h2 class="text-xl font-bold mb-3 text-slate-800 text-center">HP Jasola</h2>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="sendUpdate('Jasola', '🟢 FAST')" class="bg-green-500 text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all">🟢 चालू</button>
+                <button onclick="sendUpdate('Jasola', '🟡 BUSY')" class="bg-yellow-500 text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all">🟡 भीड़</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        // OpenStreetMap Configuration (FREE)
-        var map = L.map('map').setView([28.6139, 77.2090], 13); // Default to Delhi
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        const SUPABASE_URL = 'https://mzvluvaopokcltibmewd.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16dmx1dmFvcG9rY2x0aWJtZXdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1Nzc3MTksImV4cCI6MjA5MTE1MzcxOX0.w0JPlKdQbfe2rdEKZDwAzptNhW-HGlbTxO6UdPWtU0Y';
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        function getLocation() {
-            if (navigator.geolocation) {
-                document.getElementById('gps-status').innerText = "GPS ON";
-                document.getElementById('gps-status').classList.replace('bg-red-600', 'bg-green-600');
-                
-                navigator.geolocation.getCurrentPosition((position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    map.setView([lat, lon], 14);
-                    L.marker([lat, lon]).addTo(map).bindPopup("You are here / आप यहाँ हैं").openPopup();
-                    renderStations(lat, lon);
-                });
+        async function sendUpdate(name, status) {
+            console.log("Sending...");
+            const { error } = await supabase
+                .from('station_updates')
+                .insert([{ station_name: name, status: status }]);
+
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                alert("Updated! / जानकारी भेज दी गई है! ✅");
             }
-        }
-
-        function renderStations(uLat, uLon) {
-            // Pre-loaded Delhi Stations for Pilot
-            const stations = [
-                { name: "IGL Okhla Ph-3", lat: 28.5471, lon: 77.2732, status: "OPEN" },
-                { name: "HP Jasola", lat: 28.5398, lon: 77.2882, status: "BUSY" }
-            ];
-
-            let html = "";
-            stations.forEach(s => {
-                const dist = calculateDistance(uLat, uLon, s.lat, s.lon);
-                html += `
-                    <div class="bg-white p-4 rounded-2xl shadow border-l-8 ${s.status === 'OPEN' ? 'border-green-500' : 'border-yellow-500'}">
-                        <div class="flex justify-between">
-                            <h3 class="font-black text-lg">${s.name}</h3>
-                            <span class="font-bold text-blue-700">${dist} KM</span>
-                        </div>
-                        <p class="text-sm text-gray-500 font-bold">${s.status === 'OPEN' ? '🟢 चालू' : '🟡 भीड़'}</p>
-                    </div>`;
-            });
-            document.getElementById('station-list').innerHTML = html;
-        }
-
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-            return (R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)))).toFixed(1);
         }
     </script>
 </body>
