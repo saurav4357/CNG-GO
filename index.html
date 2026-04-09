@@ -3,45 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CNG-Go Smart</title>
+    <title>CNG-Go Fixed</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-50 font-sans h-screen flex flex-col">
+<body class="bg-slate-50 font-sans h-screen flex flex-col text-slate-900">
 
     <nav class="bg-blue-600 text-white p-5 shadow-lg text-center shrink-0">
-        <h1 class="text-2xl font-black italic tracking-tighter text-white">CNG-GO 🚕</h1>
-        <div id="status-bar" class="text-[10px] mt-1 font-bold uppercase tracking-widest opacity-70">Detecting Location...</div>
+        <h1 class="text-2xl font-black italic tracking-tighter">CNG-GO 🚕</h1>
+        <div id="status-bar" class="text-[10px] mt-1 font-bold uppercase bg-blue-800 py-1 rounded-full px-3 inline-block">
+            ⌛ Checking GPS...
+        </div>
     </nav>
 
-    <div class="flex-grow p-4 space-y-6 overflow-y-auto">
+    <div class="flex-grow p-4 space-y-4 overflow-y-auto">
         
-        <div id="nearest-card" class="bg-white rounded-[2rem] p-6 shadow-xl border-2 border-blue-100 hidden">
-            <p class="text-blue-600 font-black text-xs uppercase mb-2">Your Nearest Pump / सबसे पास वाला</p>
-            <h2 id="nearest-name" class="text-2xl font-black text-slate-800 leading-tight">Searching...</h2>
-            <p id="nearest-dist" class="text-lg font-bold text-slate-500 mb-4">-- KM away</p>
-            
-            <div class="bg-slate-50 p-4 rounded-2xl mb-4 text-center">
-                <p class="text-xs font-bold text-slate-400 uppercase">Current Status</p>
-                <p id="live-status" class="text-xl font-black text-green-600">🟢 Fast Filling</p>
-            </div>
-        </div>
-
-        <div id="update-box" class="bg-blue-900 rounded-[2rem] p-6 shadow-2xl text-white">
-            <h3 class="text-lg font-black mb-1">Update Status here</h3>
-            <p class="text-xs opacity-70 mb-5 italic">Are you at the station? Tell others!</p>
+        <div id="main-card" class="bg-white rounded-[2rem] p-6 shadow-xl border-2 border-blue-100">
+            <p class="text-blue-600 font-black text-xs uppercase mb-1">Nearest Station / सबसे पास वाला</p>
+            <h2 id="nearest-name" class="text-2xl font-black leading-tight mb-1">Detecting...</h2>
+            <p id="nearest-dist" class="text-sm font-bold text-slate-400 mb-4 italic">Please allow location access</p>
             
             <div class="grid grid-cols-1 gap-3">
-                <button onclick="report('NO_FUEL')" class="bg-red-500 hover:bg-red-600 py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">
+                <button onclick="report('NO_FUEL')" class="bg-red-500 text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">
                     ❌ NO FUEL / गैस नहीं है
                 </button>
-                <button onclick="report('LONG_QUEUE')" class="bg-orange-500 hover:bg-orange-600 py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">
+                <button onclick="report('LONG_QUEUE')" class="bg-orange-500 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">
                     ⏳ LONG QUEUE / लंबी लाइन
                 </button>
-                <button onclick="report('OPEN')" class="bg-green-500 hover:bg-green-600 py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">
+                <button onclick="report('OPEN')" class="bg-green-500 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">
                     ✅ FAST / जल्दी भर रहा है
                 </button>
             </div>
+        </div>
+
+        <div id="error-box" class="hidden bg-red-100 p-4 rounded-2xl text-red-700 text-xs font-bold border border-red-200">
+            GPS Error: <span id="error-msg">None</span>
         </div>
     </div>
 
@@ -50,26 +46,33 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16dmx1dmFvcG9rY2x0aWJtZXdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1Nzc3MTksImV4cCI6MjA5MTE1MzcxOX0.w0JPlKdQbfe2rdEKZDwAzptNhW-HGlbTxO6UdPWtU0Y';
         const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // DATA: Station Locations in Delhi
         const stations = [
-            { id: 1, name: "IGL Okhla Phase 3", lat: 28.5471, lon: 77.2732 },
-            { id: 2, name: "HP Jasola", lat: 28.5398, lon: 77.2882 },
-            { id: 3, name: "IGL Sarita Vihar", lat: 28.5300, lon: 77.2900 }
+            { name: "IGL Okhla Phase 3", lat: 28.5471, lon: 77.2732 },
+            { name: "HP Jasola", lat: 28.5398, lon: 77.2882 },
+            { name: "IGL Sarita Vihar", lat: 28.5300, lon: 77.2900 },
+            { name: "IGL Rohini Sec 11", lat: 28.7180, lon: 77.1120 }
         ];
 
         let currentNearest = null;
 
-        // 1. Find User Location
-        if (navigator.geolocation) {
-            navigator.geolocation.watchPosition((pos) => {
-                const uLat = pos.coords.latitude;
-                const uLon = pos.coords.longitude;
-                findNearest(uLat, uLon);
-                document.getElementById('status-bar').innerText = "📍 Tracking Live Location";
-            });
+        // FORCED GPS START
+        function startGPS() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        updateLogic(pos.coords.latitude, pos.coords.longitude);
+                    },
+                    (err) => {
+                        document.getElementById('error-box').classList.remove('hidden');
+                        document.getElementById('error-msg').innerText = err.message + " (Check phone settings)";
+                        document.getElementById('status-bar').innerText = "❌ GPS BLOCKED";
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            }
         }
 
-        function findNearest(uLat, uLon) {
+        function updateLogic(uLat, uLon) {
             let closest = null;
             let minDist = Infinity;
 
@@ -82,35 +85,32 @@
             });
 
             currentNearest = closest;
-            document.getElementById('nearest-card').classList.remove('hidden');
+            document.getElementById('status-bar').innerText = "✅ GPS ACTIVE";
             document.getElementById('nearest-name').innerText = closest.name;
-            document.getElementById('nearest-dist').innerText = `${minDist.toFixed(1)} KM away`;
+            document.getElementById('nearest-dist').innerText = `${minDist.toFixed(1)} KM from you`;
         }
 
         async function report(statusValue) {
-            if(!currentNearest) return alert("Please wait for GPS...");
+            if(!currentNearest) return alert("Still locating you... / लोकेशन चेक हो रही है");
 
             const { error } = await supabase
                 .from('station_updates')
-                .insert([{ 
-                    station_name: currentNearest.name, 
-                    status: statusValue 
-                }]);
+                .insert([{ station_name: currentNearest.name, status: statusValue }]);
 
-            if (error) {
-                alert("Error: " + error.message);
-            } else {
-                alert(`Reported for ${currentNearest.name}! ✅`);
-            }
+            if (error) alert(error.message);
+            else alert("Saved for: " + currentNearest.name + " ✅");
         }
 
         function calcDist(lat1, lon1, lat2, lon2) {
             const R = 6371;
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
             return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
         }
+
+        // Auto-run on start
+        startGPS();
     </script>
 </body>
 </html>
